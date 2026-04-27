@@ -1,0 +1,11 @@
+# Build artifacts
+.build/
+
+# macOS
+.DS_Store
+
+# Compiled app bundle (for distribution only)
+# ImageCropper.app/
+
+# Temporary icons (generated during build)
+icon_*.png
