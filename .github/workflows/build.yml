@@ -1,0 +1,72 @@
+name: Build macOS App
+
+on:
+  push:
+    tags:
+      - 'v*' # 当推送 v1.0.0 这样的标签时触发
+  workflow_dispatch: # 也允许手动触发
+
+jobs:
+  build:
+    runs-on: macos-latest # 使用 GitHub 提供的 macOS 运行器
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Swift
+      uses: swift-actions/setup-swift@v1
+      with:
+        swift-version: '5.9' # 指定你项目需要的 Swift 版本
+
+    - name: Build release executable
+      run: swift build -c release
+
+    - name: Create App Bundle
+      run: |
+        APP_NAME="ImageCropper"
+        APP_DIR="$APP_NAME.app"
+        mkdir -p "$APP_DIR/Contents/MacOS"
+        mkdir -p "$APP_DIR/Contents/Resources"
+
+        # 复制可执行文件
+        cp .build/release/$APP_NAME "$APP_DIR/Contents/MacOS/"
+
+        # 创建 Info.plist (根据你的项目信息修改)
+        cat > "$APP_DIR/Contents/Info.plist" <<EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>$APP_NAME</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.yourname.$APP_NAME</string>
+            <key>CFBundleName</key>
+            <string>$APP_NAME</string>
+            <key>CFBundleVersion</key>
+            <string>1.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+        </dict>
+        </plist>
+        EOF
+
+    - name: Zip the App
+      run: zip -r ImageCropper.app.zip ImageCropper.app
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ImageCropper-macOS
+        path: ImageCropper.app.zip
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ImageCropper.app.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
