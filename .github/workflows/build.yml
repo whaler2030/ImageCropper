@@ -3,24 +3,32 @@ name: Build macOS App
 on:
   push:
     tags:
-      - 'v*' # 当推送 v1.0.0 这样的标签时触发
-  workflow_dispatch: # 也允许手动触发
+      - 'v*'
+  workflow_dispatch:
+
+# 添加权限，允许创建 Release
+permissions:
+  contents: write
 
 jobs:
   build:
-    runs-on: macos-latest # 使用 GitHub 提供的 macOS 运行器
+    # 使用更明确的运行器，避免队列问题
+    runs-on: macos-15
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      # 升级到 v5 以解决 Node.js 20 警告
+      uses: actions/checkout@v5
 
-    - name: Setup Swift
-      uses: swift-actions/setup-swift@v1
-      with:
-        swift-version: '5.9' # 指定你项目需要的 Swift 版本
+    # 如果你的项目需要特定 Swift 版本，请启用此步骤
+    # - name: Setup Swift
+    #   uses: swift-actions/setup-swift@v2
+    #   with:
+    #     swift-version: '5.9'
 
     - name: Build release executable
-      run: swift build -c release
+      # 明确指定 product 名称，避免歧义
+      run: swift build -c release --product ImageCropper
 
     - name: Create App Bundle
       run: |
@@ -29,10 +37,11 @@ jobs:
         mkdir -p "$APP_DIR/Contents/MacOS"
         mkdir -p "$APP_DIR/Contents/Resources"
 
-        # 复制可执行文件
-        cp .build/release/$APP_NAME "$APP_DIR/Contents/MacOS/"
+        # 使用 --show-bin-path 动态获取二进制文件路径，更可靠
+        BIN_PATH=$(swift build -c release --product $APP_NAME --show-bin-path)
+        cp "$BIN_PATH/$APP_NAME" "$APP_DIR/Contents/MacOS/"
 
-        # 创建 Info.plist (根据你的项目信息修改)
+        # 创建 Info.plist (请根据你的项目信息修改)
         cat > "$APP_DIR/Contents/Info.plist" <<EOF
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -41,7 +50,7 @@ jobs:
             <key>CFBundleExecutable</key>
             <string>$APP_NAME</string>
             <key>CFBundleIdentifier</key>
-            <string>com.yourname.$APP_NAME</string>
+            <string>com.whaler2030.$APP_NAME</string>
             <key>CFBundleName</key>
             <string>$APP_NAME</string>
             <key>CFBundleVersion</key>
