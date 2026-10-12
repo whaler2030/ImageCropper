@@ -3,32 +3,27 @@ name: Build macOS App
 on:
   push:
     tags:
-      - 'v*'
-  workflow_dispatch:
+      - 'v*'          # 推送 v1.0.0 这样的 tag 时触发
+  workflow_dispatch:  # 允许在 Actions 页面手动触发
 
-# 添加权限，允许创建 Release
+# 创建 Release 需要写权限
 permissions:
   contents: write
 
 jobs:
   build:
-    # 使用更明确的运行器，避免队列问题
+    # 使用 macOS 15 运行器（ARM64），但我们会交叉编译出通用二进制
     runs-on: macos-15
 
     steps:
     - name: Checkout repository
-      # 升级到 v5 以解决 Node.js 20 警告
-      uses: actions/checkout@v5
+      uses: actions/checkout@v5   # v5 避免 Node.js 20 弃用警告
 
-    # 如果你的项目需要特定 Swift 版本，请启用此步骤
-    # - name: Setup Swift
-    #   uses: swift-actions/setup-swift@v2
-    #   with:
-    #     swift-version: '5.9'
-
-    - name: Build release executable
-      # 明确指定 product 名称，避免歧义
-      run: swift build -c release --product ImageCropper
+    - name: Build universal binary
+      run: |
+        # 同时为 arm64 和 x86_64 编译，生成通用二进制
+        swift build -c release --product ImageCropper \
+          --arch arm64 --arch x86_64
 
     - name: Create App Bundle
       run: |
@@ -37,11 +32,18 @@ jobs:
         mkdir -p "$APP_DIR/Contents/MacOS"
         mkdir -p "$APP_DIR/Contents/Resources"
 
-        # 使用 --show-bin-path 动态获取二进制文件路径，更可靠
-        BIN_PATH=$(swift build -c release --product $APP_NAME --show-bin-path)
+        # 获取二进制文件所在目录（SwiftPM 对多架构构建会放在 .build/apple/Products/Release）
+        BIN_PATH=$(swift build -c release --product $APP_NAME --arch arm64 --arch x86_64 --show-bin-path)
+        echo "Binary path: $BIN_PATH"
+        ls -la "$BIN_PATH"
+
+        # 复制可执行文件
         cp "$BIN_PATH/$APP_NAME" "$APP_DIR/Contents/MacOS/"
 
-        # 创建 Info.plist (请根据你的项目信息修改)
+        # 验证二进制架构（应显示 x86_64 和 arm64）
+        lipo -info "$APP_DIR/Contents/MacOS/$APP_NAME"
+
+        # 创建 Info.plist
         cat > "$APP_DIR/Contents/Info.plist" <<EOF
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -59,6 +61,8 @@ jobs:
             <string>1.0</string>
             <key>CFBundlePackageType</key>
             <string>APPL</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>13.0</string>
         </dict>
         </plist>
         EOF
